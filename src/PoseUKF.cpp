@@ -119,7 +119,7 @@ AccelerationType
 measurementAcceleration(const FilterState &state)
 {
     // returns expected accelerations in the IMU frame
-    return AccelerationType(state.orientation.inverse() * (Eigen::Vector3d(state.acceleration) + Eigen::Vector3d(0., 0., state.gravity(0))) + Eigen::Vector3d(state.bias_acc));
+    return AccelerationType(state.orientation.inverse() * (Eigen::Vector3d(state.acceleration) /* + Eigen::Vector3d(0., 0., state.gravity(0))*/) + Eigen::Vector3d(state.bias_acc));
 }
 
 template <typename FilterState>
@@ -263,6 +263,32 @@ static bool d2p95(const scalar_type &mahalanobis2)
     }
 }
 
+template <typename scalar_type>
+static bool d2p90(const scalar_type &mahalanobis2)
+{
+    if(mahalanobis2>4.605) // for 2 degrees of freedom, 90% likelihood = 4.605, https://www.uam.es/personal_pdi/ciencias/anabz/Prest/Trabajos/Critical_Values_of_the_Chi-Squared_Distribution.pdf
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+template <typename scalar_type>
+static bool d2p80(const scalar_type &mahalanobis2)
+{
+    if(mahalanobis2>3.219) // for 2 degrees of freedom, 80% likelihood = 3.219, https://www.uam.es/personal_pdi/ciencias/anabz/Prest/Trabajos/Critical_Values_of_the_Chi-Squared_Distribution.pdf
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
 PoseUKF::PoseUKF(const State& initial_state, const Covariance& state_cov,
                 const LocationConfiguration& location, const uwv_dynamic_model::UWVParameters& model_parameters,
                 const PoseUKFParameter& filter_parameter) : filter_parameter(filter_parameter)
@@ -364,7 +390,7 @@ void PoseUKF::integrateMeasurement(const GeographicPosition& geo_position, const
 
     ukf->update(projected_position, boost::bind(measurementXYPosition<State>, _1),
                 boost::bind(ukfom::id< XY_Position::Cov >, geo_position.cov),
-                d2p95<State::scalar>);
+                d2p80<State::scalar>);
 }
 
 void PoseUKF::integrateMeasurement(const BodyEffortsMeasurement& body_efforts, bool only_affect_velocity)
@@ -449,5 +475,5 @@ PoseUKF::RotationRate::Mu PoseUKF::getRotationRate()
     double latitude, longitude;
     projection->navToWorld(ukf->mu().position.x(), ukf->mu().position.y(), latitude, longitude);
     Eigen::Vector3d earth_rotation = Eigen::Vector3d(pose_estimation::EARTHW * cos(latitude), 0., pose_estimation::EARTHW * sin(latitude));
-    return rotation_rate - ukf->mu().bias_gyro - ukf->mu().orientation.inverse() * earth_rotation;
+    return rotation_rate /* - ukf->mu().bias_gyro - ukf->mu().orientation.inverse() * earth_rotation*/;
 }
